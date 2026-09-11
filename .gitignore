@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
+venv/
+
+# Secrets / environment variables
+.env
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Binaries
+cloudflared.exe
+*.exe

@@ -1,0 +1,10 @@
+weights:
+  random_forest_supervised: 0.60
+  isolation_forest_unsupervised: 0.40
+
+severity_bands:
+  informational: [0, 19]
+  low: [20, 39]
+  medium: [40, 59]
+  high: [60, 79]
+  critical: [80, 100]

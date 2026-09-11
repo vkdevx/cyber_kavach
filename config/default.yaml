@@ -1,0 +1,20 @@
+system:
+  product_name: "OneWay Sentinel"
+  version: "1.0.0"
+  zero_outbound_guarantee: true
+
+pipeline:
+  flow_window_seconds: 5.0
+  alert_threshold: 40
+  critical_threshold: 80
+  dedup_window_seconds: 60.0
+
+model:
+  supervised_artifact: "models/trained/random_forest_v1.pkl"
+  unsupervised_artifact: "models/trained/isolation_forest_v1.pkl"
+  confidence_threshold: 0.70
+  anomaly_threshold: 0.65
+
+storage:
+  sqlite_wal_mode: true
+  db_path: "./oneway_sentinel.db"

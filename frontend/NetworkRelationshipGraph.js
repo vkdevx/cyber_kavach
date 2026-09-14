@@ -78,10 +78,27 @@ function NetworkRelationshipGraph({
   const simulationRef = React.useRef(null);
   const theme = THEME_TOKENS[themeMode] || THEME_TOKENS.dark;
 
+  // Serialize nodesData for stable dependency checking
+  const nodesDataStr = React.useMemo(() => JSON.stringify(nodesData), [nodesData]);
+
   // Initialize and run d3 force-directed simulation
   React.useEffect(() => {
-    const rawNodes = JSON.parse(JSON.stringify(nodesData));
+    const rawNodes = JSON.parse(nodesDataStr || "[]");
+    if (!rawNodes.length) return;
+
     const centerNode = rawNodes.find(n => n.isCenter) || rawNodes[0];
+
+    // Seed initial coordinates to prevent layout flicker or NaN values
+    rawNodes.forEach((n, i) => {
+      if (n.isCenter) {
+        n.x = width / 2;
+        n.y = height / 2;
+      } else {
+        const angle = (i / (rawNodes.length || 1)) * 2 * Math.PI;
+        n.x = width / 2 + 130 * Math.cos(angle);
+        n.y = height / 2 + 130 * Math.sin(angle);
+      }
+    });
 
     const generatedLinks = rawNodes
       .filter(n => !n.isCenter)
@@ -92,6 +109,10 @@ function NetworkRelationshipGraph({
       }));
 
     if (window.d3) {
+      if (simulationRef.current) {
+        simulationRef.current.stop();
+      }
+
       const simulation = window.d3.forceSimulation(rawNodes)
         .force("link", window.d3.forceLink(generatedLinks).id(d => d.id).distance(140))
         .force("charge", window.d3.forceManyBody().strength(-350))
@@ -104,6 +125,11 @@ function NetworkRelationshipGraph({
         setNodes([...rawNodes]);
         setLinks([...generatedLinks]);
       });
+
+      // Run initial ticks immediately so graph appears instantly
+      for (let i = 0; i < 30; ++i) simulation.tick();
+      setNodes([...rawNodes]);
+      setLinks([...generatedLinks]);
     } else {
       // Fallback radial layout if D3 is loading
       const centerX = width / 2;
@@ -112,7 +138,7 @@ function NetworkRelationshipGraph({
       const sources = rawNodes.filter(n => !n.isCenter);
 
       sources.forEach((n, i) => {
-        const angle = (i / sources.length) * 2 * Math.PI;
+        const angle = (i / (sources.length || 1)) * 2 * Math.PI;
         n.x = centerX + radius * Math.cos(angle);
         n.y = centerY + radius * Math.sin(angle);
       });
@@ -126,7 +152,7 @@ function NetworkRelationshipGraph({
     return () => {
       if (simulationRef.current) simulationRef.current.stop();
     };
-  }, [nodesData, width, height]);
+  }, [nodesDataStr, width, height]);
 
   // Zoom & Pan Handlers
   const handleWheel = (e) => {

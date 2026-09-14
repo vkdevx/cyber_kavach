@@ -38,18 +38,36 @@ class PassiveCaptureService:
 
     def start(self, interface: Optional[str] = None):
         """Starts passive packet capture on the specified interface."""
+        import sys
+        from scapy.all import conf
         iface = interface or settings.CAPTURE_INTERFACE
-        InterfaceGuard.assert_read_only_interface(iface)
+
+        # On Windows or if eth0 is specified on non-Linux, use default active adapter
+        if sys.platform == "win32" or iface == "eth0":
+            actual_iface = conf.iface
+            try:
+                from scapy.all import IFACES
+                for k, v in IFACES.items():
+                    ip = str(getattr(v, "ip", "") or "")
+                    if ip and not ip.startswith("127.") and not ip.startswith("169.254.") and not ip.startswith("192.168.56."):
+                        actual_iface = v
+                        break
+            except Exception:
+                pass
+        else:
+            actual_iface = iface
+
+        InterfaceGuard.assert_read_only_interface(str(actual_iface))
 
         log_security_event(
             event_type="PASSIVE_CAPTURE_START",
-            message=f"Starting passive capture on interface '{iface}'",
-            details={"interface": iface}
+            message=f"Starting passive capture on interface '{actual_iface}'",
+            details={"interface": str(actual_iface)}
         )
 
         try:
             self.sniffer = AsyncSniffer(
-                iface=iface,
+                iface=actual_iface,
                 prn=self._scapy_callback,
                 store=False,
                 promisc=settings.PROMISCUOUS_MODE
@@ -59,7 +77,7 @@ class PassiveCaptureService:
         except Exception as exc:
             log_security_event(
                 event_type="PASSIVE_CAPTURE_ERROR",
-                message=f"Failed to start passive sniffer on '{iface}': {str(exc)}. Falling back to synthetic mode.",
+                message=f"Failed to start passive sniffer on '{actual_iface}': {str(exc)}. Falling back to synthetic mode.",
                 level=30
             )
             self.is_running = False

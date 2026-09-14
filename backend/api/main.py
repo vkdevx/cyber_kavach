@@ -24,14 +24,33 @@ capture_service = PassiveCaptureService(
     packet_callback=lambda pkt: orchestrator.process_packet(pkt, source="live")
 )
 
+import threading
+
+_worker_running = False
+
+def _background_flow_worker():
+    while _worker_running:
+        try:
+            time.sleep(0.1)
+            expired_flows = orchestrator.aggregator.flush_expired_flows()
+            for flow in expired_flows:
+                orchestrator.process_flow(flow)
+        except Exception:
+            pass
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _worker_running
     init_db()
+    _worker_running = True
+    worker_thread = threading.Thread(target=_background_flow_worker, daemon=True, name="FlowFlushWorker")
+    worker_thread.start()
     try:
         capture_service.start()
     except Exception:
         pass
     yield
+    _worker_running = False
     capture_service.stop()
 
 app = FastAPI(
@@ -87,6 +106,7 @@ def get_status():
 
 
 @app.websocket("/ws/alerts")
+@app.websocket("/ws/live-traffic")
 async def websocket_alerts(websocket: WebSocket):
     await ws_manager.connect(websocket)
     try:

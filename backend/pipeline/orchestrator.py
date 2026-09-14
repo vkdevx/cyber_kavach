@@ -92,13 +92,15 @@ class PipelineOrchestrator:
                     rf_prob=rf_prob,
                     if_score=if_score,
                     intel_ip_match=intel_ip_match,
-                    intel_cidr_match=intel_cidr_match
+                    intel_cidr_match=intel_cidr_match,
+                    src_port=flow.src_port,
+                    dst_port=flow.dst_port
                 )
             )
 
-            # 6. Generate Alert if Risk Score >= Threshold
+            # 6. Generate Alert if Genuine Threat Detected and Risk Score >= Threshold
             alert_payload = None
-            if risk_score >= settings.ALERT_THRESHOLD or threat_category != "Benign":
+            if threat_category.lower() != "benign" and risk_score >= settings.ALERT_THRESHOLD:
                 alert_id = f"alt_{uuid.uuid4().hex[:12]}"
                 geolocation = {
                     "country": getattr(intel_ip_match, "country_code", "Germany") if intel_ip_match else "Unknown",

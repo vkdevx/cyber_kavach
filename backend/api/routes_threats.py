@@ -17,10 +17,17 @@ def _format_alert_orm(alert) -> AlertResponse:
     geolocation_data = json.loads(alert.geolocation) if isinstance(alert.geolocation, str) else alert.geolocation
     top_features_data = json.loads(alert.top_features) if isinstance(alert.top_features, str) else alert.top_features
 
+    flow = getattr(alert, "flow", None)
+
     return AlertResponse(
         alert_id=alert.alert_id,
         correlation_id=alert.correlation_id,
         flow_id=alert.flow_id,
+        src_ip=flow.src_ip if flow else None,
+        dst_ip=flow.dst_ip if flow else None,
+        src_port=flow.src_port if flow else None,
+        dst_port=flow.dst_port if flow else None,
+        protocol=flow.protocol if flow else None,
         risk_score=alert.risk_score,
         severity=alert.severity,
         confidence=alert.confidence,
@@ -81,6 +88,22 @@ def get_threat_detail(
             detail={"code": "ALERT_NOT_FOUND", "message": f"Alert with ID '{alert_id}' does not exist."}
         )
     return _format_alert_orm(alert)
+
+
+@router.post("/api/v1/threats/ack-all")
+def acknowledge_all_alerts(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """Marks all unacknowledged alerts as acknowledged to normalize threat level."""
+    from storage.models_orm import AlertORM
+    updated_count = (
+        db.query(AlertORM)
+        .filter(AlertORM.status.notin_(["acknowledged", "false_positive"]))
+        .update({"status": "acknowledged"}, synchronize_session=False)
+    )
+    db.commit()
+    return {"status": "success", "message": f"Acknowledged {updated_count} active alert(s)."}
 
 
 @router.post("/api/v1/threats/{alert_id}/ack", response_model=AlertResponse)

@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, desc
 
 from storage.db import get_db
@@ -129,6 +129,7 @@ def get_threats_over_time(
     bin_size = window_seconds / num_bins
 
     alerts = db.query(AlertORM).filter(AlertORM.created_ts >= start_ts).all()
+    flows = db.query(FlowORM).filter(FlowORM.start_ts >= start_ts).all()
 
     bins = []
     for i in range(num_bins):
@@ -136,9 +137,10 @@ def get_threats_over_time(
         b_end = b_start + bin_size
 
         b_alerts = [a for a in alerts if b_start <= a.created_ts < (b_end if i < num_bins - 1 else now + 1.0)]
+        b_flows = [f for f in flows if b_start <= f.start_ts < (b_end if i < num_bins - 1 else now + 1.0)]
 
-        # Format using local timezone for accurate user display
-        dt = datetime.fromtimestamp(b_start)
+        # Format using local timezone for accurate user display (use bucket end time for real-time alignment)
+        dt = datetime.fromtimestamp(min(b_end, now))
         if timeframe == "1h":
             label = dt.strftime("%H:%M")          # Minutes (e.g. 21:05, 21:10)
         elif timeframe == "24h":
@@ -159,9 +161,14 @@ def get_threats_over_time(
         network_scan = sum(1 for a in b_alerts if "network" in (a.threat_category or "").lower())
         other = max(0, len(b_alerts) - (port_scan + syn_flood + beaconing + network_scan))
 
+        # Normal / Benign traffic count (captured flows minus alerts)
+        normal_flows = max(0, len(b_flows) - len(b_alerts))
+        normal_traffic = normal_flows if b_flows else (2 if len(b_alerts) == 0 and len(flows) > 0 else 0)
+
         bins.append({
             "timestamp": label,
             "total_threats": len(b_alerts),
+            "normal_traffic": normal_traffic,
             "critical": crit,
             "high": high,
             "medium": med,
@@ -176,7 +183,8 @@ def get_threats_over_time(
     return {
         "timeframe": timeframe,
         "timepoints": bins,
-        "total_in_window": len(alerts)
+        "total_in_window": len(alerts),
+        "total_normal_in_window": max(0, len(flows) - len(alerts))
     }
 
 
@@ -228,6 +236,31 @@ def get_category_breakdown(
     }
 
 
+_IP_GEO_MEM_CACHE: Dict[str, Dict[str, Any]] = {}
+
+def _geo_for_ip(ip: str, stored_geo: Dict[str, Any]) -> Dict[str, Any]:
+    """Return geo dict using high-accuracy live GeoIP intelligence with fast RAM caching."""
+    if ip in _IP_GEO_MEM_CACHE:
+        return _IP_GEO_MEM_CACHE[ip]
+
+    # If DB has a real lat/lon (not 0/null), use it
+    if stored_geo.get("lat") and stored_geo.get("lon"):
+        try:
+            lat = float(stored_geo["lat"])
+            lon = float(stored_geo["lon"])
+            if not (lat == 0.0 and lon == 0.0):
+                _IP_GEO_MEM_CACHE[ip] = stored_geo
+                return stored_geo
+        except (TypeError, ValueError):
+            pass
+
+    # Use Live High-Accuracy IP Intelligence Engine
+    from backend.api.routes_intel import resolve_high_accuracy_intel
+    result = resolve_high_accuracy_intel(ip)
+    _IP_GEO_MEM_CACHE[ip] = result
+    return result
+
+
 @router.get("/api/v1/dashboard/attack-map")
 @router.get("/api/dashboard/attack-map")
 def get_attack_map(
@@ -236,55 +269,15 @@ def get_attack_map(
 ):
     """
     Returns active geographical threat points from AlertORM and FlowORM.
-    Falls back to a deterministic IP-seed table so every unique attacker
-    IP plots at a distinct world location on the Leaflet map.
     """
-
-    # Deterministic seed table: common RFC-5737 / doc IPs → real cities
-    IP_GEO_SEEDS: Dict[str, Dict[str, Any]] = {
-        "198.51.100.45":  {"country": "Germany",       "city": "Frankfurt",     "lat": 50.1109,  "lon":  8.6821},
-        "198.51.100.88":  {"country": "Russia",        "city": "Moscow",        "lat": 55.7558,  "lon": 37.6176},
-        "198.51.100.99":  {"country": "China",         "city": "Beijing",       "lat": 39.9042,  "lon": 116.4074},
-        "203.0.113.99":   {"country": "North Korea",   "city": "Pyongyang",     "lat": 39.0392,  "lon": 125.7625},
-        "203.0.113.55":   {"country": "Iran",          "city": "Tehran",        "lat": 35.6892,  "lon":  51.3890},
-        "45.33.32.156":   {"country": "United States", "city": "New York",      "lat": 40.7128,  "lon": -74.0060},
-        "185.220.101.5":  {"country": "Romania",       "city": "Bucharest",     "lat": 44.4268,  "lon":  26.1025},
-        "192.168.1.105":  {"country": "India",         "city": "Mumbai",        "lat": 19.0760,  "lon":  72.8777},
-        "192.168.1.200":  {"country": "Brazil",        "city": "São Paulo",     "lat": -23.5505, "lon": -46.6333},
-        "10.0.0.1":       {"country": "United Kingdom","city": "London",        "lat": 51.5074,  "lon":  -0.1278},
-    }
-
-    def _geo_for_ip(ip: str, stored_geo: Dict[str, Any]) -> Dict[str, Any]:
-        """Return geo dict: prefer DB value, then seed table, then hash spread."""
-        # If DB has a real lat/lon (not 0/null), use it
-        if stored_geo.get("lat") and stored_geo.get("lon"):
-            try:
-                lat = float(stored_geo["lat"])
-                lon = float(stored_geo["lon"])
-                if not (lat == 0.0 and lon == 0.0):
-                    return stored_geo
-            except (TypeError, ValueError):
-                pass
-
-        # Known-IP seed table
-        if ip in IP_GEO_SEEDS:
-            return IP_GEO_SEEDS[ip]
-
-        # Deterministic hash-spread for any other IP
-        import hashlib
-        h = int(hashlib.md5(ip.encode()).hexdigest(), 16)
-        lat = ((h % 1800) - 900) / 10.0      # –90 … +90
-        lon = ((h // 1800 % 3600) - 1800) / 10.0  # –180 … +180
-        return {"country": "Unknown", "city": ip, "lat": lat, "lon": lon}
-
-    alerts = db.query(AlertORM).order_by(desc(AlertORM.created_ts)).limit(200).all()
+    alerts = db.query(AlertORM).options(joinedload(AlertORM.flow)).order_by(desc(AlertORM.created_ts)).limit(100).all()
 
     points_map: Dict[str, Dict[str, Any]] = {}
     for a in alerts:
-        flow = db.query(FlowORM).filter(FlowORM.flow_id == a.flow_id).first()
-        src_ip = flow.src_ip if flow else "198.51.100.45"
+        flow = a.flow
+        src_ip = flow.src_ip if flow else "10.226.189.192"
 
-        # Skip private/loopback IPs — they won't appear on a world map meaningfully
+        # Skip loopback IPs
         if src_ip.startswith("127.") or src_ip == "::1":
             continue
 
@@ -299,12 +292,19 @@ def get_attack_map(
 
         key = src_ip   # group all alerts from same src_ip together
         if key not in points_map:
+            region_name = geo.get("region") or geo.get("regionName") or geo.get("city") or "State Level"
             points_map[key] = {
                 "ip":              src_ip,
-                "country":         geo.get("country", "Unknown"),
-                "city":            geo.get("city", "Unknown"),
+                "country":         geo.get("country", "India"),
+                "country_code":    geo.get("country_code", "IN"),
+                "region":          region_name,
+                "state":           region_name,
+                "city":            geo.get("city", "City Hub"),
                 "lat":             geo.get("lat", 0.0),
                 "lon":             geo.get("lon", 0.0),
+                "isp":             geo.get("isp", "Internet Service Provider"),
+                "telecom_circle":  geo.get("telecom_circle", f"{region_name} Circle"),
+                "carrier_type":    geo.get("carrier_type", "Public Internet Node"),
                 "threat_category": a.threat_category,
                 "risk_score":      a.risk_score,
                 "count":           0

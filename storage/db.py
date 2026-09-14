@@ -7,7 +7,7 @@ Base = declarative_base()
 
 # Determine SQLite connection string
 DATABASE_URL = settings.DATABASE_URL
-connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+connect_args = {"check_same_thread": False, "timeout": 30.0} if "sqlite" in DATABASE_URL else {}
 
 engine = create_engine(
     DATABASE_URL,

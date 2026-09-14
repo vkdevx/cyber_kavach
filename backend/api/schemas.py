@@ -77,6 +77,11 @@ class AlertResponse(BaseModel):
     alert_id: str
     correlation_id: str
     flow_id: str
+    src_ip: Optional[str] = None
+    dst_ip: Optional[str] = None
+    src_port: Optional[int] = None
+    dst_port: Optional[int] = None
+    protocol: Optional[str] = None
     risk_score: int
     severity: str
     confidence: float

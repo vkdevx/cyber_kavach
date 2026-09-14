@@ -220,6 +220,17 @@ body {
   box-shadow: 0 0 12px rgba(255, 59, 92, 0.4);
 }
 
+.btn-success {
+  background: rgba(46, 212, 122, 0.15);
+  color: var(--status-success);
+  border-color: rgba(46, 212, 122, 0.4);
+}
+.btn-success:hover {
+  background: var(--status-success);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(46, 212, 122, 0.4);
+}
+
 /* Theme Switcher Button */
 .btn-theme-toggle {
   background: var(--bg-surface-sunken);

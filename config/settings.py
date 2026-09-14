@@ -13,13 +13,13 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./oneway_sentinel.db"
     DATABASE_WAL_MODE: bool = True
 
-    CAPTURE_INTERFACE: str = "eth0"
+    CAPTURE_INTERFACE: str = "Wi-Fi"
     PROMISCUOUS_MODE: bool = True
 
-    FLOW_WINDOW_SECONDS: float = 5.0
-    ALERT_THRESHOLD: int = 40
+    FLOW_WINDOW_SECONDS: float = 10.0   # 10s window — more packets per flow for accurate analysis
+    ALERT_THRESHOLD: int = 60           # Only alert on medium+ risk (was 40 — caused false positives)
     CRITICAL_THRESHOLD: int = 80
-    DEDUP_WINDOW_SECONDS: float = 60.0
+    DEDUP_WINDOW_SECONDS: float = 120.0  # 2 min dedup — avoid duplicate alerts for same attack
 
     WEIGHT_SUPERVISED_RF: float = 0.60
     WEIGHT_UNSUPERVISED_IF: float = 0.40

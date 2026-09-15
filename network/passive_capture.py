@@ -42,18 +42,28 @@ class PassiveCaptureService:
         from scapy.all import conf
         iface = interface or settings.CAPTURE_INTERFACE
 
-        # On Windows or if eth0 is specified on non-Linux, use default active adapter
-        if sys.platform == "win32" or iface == "eth0":
+        # On Windows or if eth0 is specified on non-Linux, resolve the exact active adapter
+        if sys.platform == "win32":
             actual_iface = conf.iface
             try:
                 from scapy.all import IFACES
+                # 1. Match by exact interface name (e.g. "Wi-Fi")
                 for k, v in IFACES.items():
-                    ip = str(getattr(v, "ip", "") or "")
-                    if ip and not ip.startswith("127.") and not ip.startswith("169.254.") and not ip.startswith("192.168.56."):
+                    name = str(getattr(v, "name", "") or "").lower()
+                    if iface.lower() in name or name == iface.lower():
                         actual_iface = v
                         break
+                else:
+                    # 2. Match by active non-loopback, non-virtual IP
+                    for k, v in IFACES.items():
+                        ip = str(getattr(v, "ip", "") or "")
+                        if ip and not ip.startswith("127.") and not ip.startswith("169.254.") and not ip.startswith("192.168.56."):
+                            actual_iface = v
+                            break
             except Exception:
                 pass
+        elif iface == "eth0":
+            actual_iface = conf.iface
         else:
             actual_iface = iface
 

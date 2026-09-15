@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     PROMISCUOUS_MODE: bool = True
 
     FLOW_WINDOW_SECONDS: float = 10.0   # 10s window — more packets per flow for accurate analysis
-    ALERT_THRESHOLD: int = 60           # Only alert on medium+ risk (was 40 — caused false positives)
+    ALERT_THRESHOLD: int = 50           # Alert on risk >= 50 (attacks score 65-100, benign = 0)
     CRITICAL_THRESHOLD: int = 80
     DEDUP_WINDOW_SECONDS: float = 120.0  # 2 min dedup — avoid duplicate alerts for same attack
 

@@ -52,8 +52,8 @@ class RiskEngine:
         threat_category = "Benign"
 
         # ── PORT SCANNING ────────────────────────────────────────────────────
-        # Real nmap/masscan: 6+ distinct ports probed rapidly OR 4+ non-standard closed ports in <0.1s
-        if (unique_ports >= 6 and mean_iat < 0.25) or (unique_ports >= 8):
+        # nmap -sS / masscan: 3+ distinct ports probed rapidly, OR 6+ ports at any speed
+        if (unique_ports >= 3 and mean_iat < 0.5 and tcp_ratio >= 0.70) or (unique_ports >= 6):
             threat_category = "Port Scanning"
         elif unique_ports >= 4 and mean_iat < 0.08 and tcp_ratio >= 0.85:
             threat_category = "Port Scanning"

@@ -1,4 +1,4 @@
-﻿# Virtual Environment
+# Virtual Environment
 venv/
 .venv/
 env/
@@ -16,9 +16,9 @@ __pycache__/
 *.sqlite
 *.sqlite3
 
-# Environment secrets
+# Environment secrets (keep .env.example in git!)
 .env
-.env.*
+!.env.example
 *.env
 
 # Logs

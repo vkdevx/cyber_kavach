@@ -23,9 +23,12 @@ class FlowAggregator:
 
         if key in self.active_flows:
             flow = self.active_flows[key]
-            # Check if flow duration exceeds sliding window size OR if rapid burst threshold reached (e.g. hping3/nmap burst >= 15 pkts or 5+ distinct ports)
+            # Flush conditions:
+            # - Time window expired, OR
+            # - Rapid burst: 10+ packets (catches hping3/scapy floods), OR
+            # - 3+ distinct dst ports in one flow (catches nmap -sS, masscan, etc.)
             distinct_ports = len(set(p.dst_port for p in flow.packets))
-            if (packet.timestamp - flow.start_ts >= self.window_seconds) or (flow.packet_count >= 15) or (distinct_ports >= 5):
+            if (packet.timestamp - flow.start_ts >= self.window_seconds) or (flow.packet_count >= 10) or (distinct_ports >= 3):
                 # Close current flow window and emit it
                 flow.end_ts = max(flow.end_ts, packet.timestamp)
                 completed_flow = flow

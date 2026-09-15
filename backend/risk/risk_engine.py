@@ -81,32 +81,30 @@ class RiskEngine:
         elif fin_flags >= 2 or (fin_flags >= 1 and unique_ports >= 2):
             threat_category = "FIN Port Scan"
 
-        # ── PORT SCANNING (SYN / Half-Open Scan / Connect Scan) ──────────────
-        # nmap -sS / masscan: 3+ distinct ports probed rapidly, OR 2+ ports with 100% SYN & 0% ACK
-        elif (unique_ports >= 2 and syn_ratio >= 0.75 and ack_ratio == 0 and total_pkts >= 2):
+        # ── PORT SCANNING (SYN / Half-Open Scan / Connect Scan / Nmap) ───────
+        # nmap -sS / -sT / masscan / netcat: 2+ distinct ports probed
+        if (unique_ports >= 2 and mean_iat < 0.8) or (unique_ports >= 2 and syn_ratio >= 0.50) or (unique_ports >= 3):
             threat_category = "Port Scanning"
-        elif (unique_ports >= 3 and mean_iat < 0.5 and tcp_ratio >= 0.70) or (unique_ports >= 6):
-            threat_category = "Port Scanning"
-        elif unique_ports >= 4 and mean_iat < 0.08 and tcp_ratio >= 0.85:
+        elif unique_ports >= 4 and tcp_ratio >= 0.80:
             threat_category = "Port Scanning"
 
         # ── NETWORK SCANNING ─────────────────────────────────────────────────
-        # Real scanner: 6+ unique IPs probed quickly
-        elif (unique_ips >= 6 and mean_iat < 0.20) or (unique_ips >= 8):
+        # Scanner probing multiple target hosts
+        elif (unique_ips >= 4 and mean_iat < 0.30) or (unique_ips >= 6):
             threat_category = "Network Scanning"
 
         # ── SYN FLOOD / DoS / HTTP REQUEST FLOOD ─────────────────────────────
-        # 1. Real SYN flood: 25+ tiny packets (<120B) at machine speed with low IAT and high TCP ratio
-        if (
-            (total_pkts >= 20 and avg_pkt_size < 140 and tcp_ratio >= 0.80 and mean_iat < 0.05)
-            or (total_pkts >= 40 and mean_iat < 0.02 and tcp_ratio >= 0.75)
+        # 1. SYN flood: Rapid packets at machine speed
+        elif (
+            (total_pkts >= 15 and avg_pkt_size < 140 and tcp_ratio >= 0.75 and mean_iat < 0.08)
+            or (total_pkts >= 30 and mean_iat < 0.05 and tcp_ratio >= 0.70)
         ):
             threat_category = "SYN Flood / DoS"
 
-        # 2. HTTP Request Flood / Connection Burst (e.g. 500 parallel curls, endpoint fuzzing, DoS burst)
-        elif (total_pkts >= 8 and mean_iat < 0.05 and tcp_ratio >= 0.70):
+        # 2. HTTP Request Flood / Curl Loop / DoS Burst (e.g. 10-500 curls, ab, wrk)
+        elif (total_pkts >= 5 and mean_iat < 0.15 and tcp_ratio >= 0.60):
             threat_category = "DDoS-like Volumetric Behavior"
-        elif (total_pkts >= 20 and mean_iat < 0.10 and tcp_ratio >= 0.60):
+        elif (total_pkts >= 15 and mean_iat < 0.30 and tcp_ratio >= 0.50):
             threat_category = "DDoS-like Volumetric Behavior"
 
         # ── UDP FLOOD / SCAN ─────────────────────────────────────────────────

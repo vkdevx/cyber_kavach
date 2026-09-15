@@ -7,9 +7,17 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent
 os.chdir(ROOT_DIR)
 
+# Ensure UTF-8 stdout on Windows
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 def main():
     print("=" * 65)
-    print("   🛡️ CYBERKAVACH (SIH26145) — AI THREAT DETECTION & DEFENCE SYSTEM")
+    print("   [+] CYBERKAVACH (SIH26145) - AI THREAT DETECTION & DEFENCE SYSTEM")
     print("=" * 65)
     print(f"[*] Project Directory: {ROOT_DIR}")
 

@@ -56,7 +56,8 @@ class FlowRepository:
         udp_ratio: float,
         icmp_ratio: float,
         small_large_pkt_ratio: float,
-        byte_entropy: float
+        byte_entropy: float,
+        **kwargs
     ) -> FeatureORM:
         features = FeatureORM(
             flow_id=flow_id,

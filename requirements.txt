@@ -1,4 +1,4 @@
-﻿# Core Framework
+# Core Framework
 fastapi==0.141.1
 uvicorn==0.52.4
 starlette==1.6.0
@@ -43,3 +43,4 @@ colorama==0.4.6
 pyngrok==8.1.2
 aiohttp==3.14.3
 websockets==16.1.1
+watchdog==4.0.0

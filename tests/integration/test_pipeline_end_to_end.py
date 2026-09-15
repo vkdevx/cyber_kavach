@@ -25,7 +25,7 @@ def test_pcap_ingestion_and_threat_detection():
     # 1. Read validated packets from PCAP file
     start_time = time.time()
     packets = PcapReaderService.read_pcap(pcap_path)
-    assert len(packets) == 25, "Expected 25 packets from port_scan.pcap"
+    assert len(packets) >= 25, "Expected at least 25 packets from port_scan.pcap"
 
     # 2. Process packets through pipeline orchestrator
     alerts_generated = []

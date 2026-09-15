@@ -69,6 +69,31 @@ class FeatureExtractor:
         lengths = [p.packet_length for p in packets] if packets else [int(avg_packet_size)]
         byte_entropy = cls.calculate_shannon_entropy(lengths)
 
+        # Advanced TCP Flag Profiling (Half-open SYN, NULL, XMAS, FIN scan detection)
+        syn_only_cnt = 0
+        ack_cnt = 0
+        null_flag_cnt = 0
+        xmas_flag_cnt = 0
+        fin_flag_cnt = 0
+
+        for p in packets:
+            if p.protocol == "TCP":
+                flags = (p.tcp_flags or "").upper()
+                if not flags or flags == "0":
+                    null_flag_cnt += 1
+                elif "F" in flags and "P" in flags and "U" in flags:
+                    xmas_flag_cnt += 1
+                elif "F" in flags and "A" not in flags:
+                    fin_flag_cnt += 1
+                elif "S" in flags and "A" not in flags:
+                    syn_only_cnt += 1
+                if "A" in flags:
+                    ack_cnt += 1
+
+        syn_ratio = (syn_only_cnt / total_packets) if total_packets > 0 else 0.0
+        ack_ratio = (ack_cnt / total_packets) if total_packets > 0 else 0.0
+        packets_per_sec = total_packets / flow_duration if flow_duration > 0 else 0.0
+
         return {
             "total_packets": float(round(total_packets, 2)),
             "total_bytes": float(round(total_bytes, 2)),
@@ -82,7 +107,13 @@ class FeatureExtractor:
             "udp_ratio": float(round(udp_ratio, 4)),
             "icmp_ratio": float(round(icmp_ratio, 4)),
             "small_large_pkt_ratio": float(round(small_large_ratio, 4)),
-            "byte_entropy": float(round(byte_entropy, 4))
+            "byte_entropy": float(round(byte_entropy, 4)),
+            "syn_ratio": float(round(syn_ratio, 4)),
+            "ack_ratio": float(round(ack_ratio, 4)),
+            "null_flag_count": float(null_flag_cnt),
+            "xmas_flag_count": float(xmas_flag_cnt),
+            "fin_flag_count": float(fin_flag_cnt),
+            "packets_per_sec": float(round(packets_per_sec, 2)),
         }
 
     @classmethod

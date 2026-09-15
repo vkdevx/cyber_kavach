@@ -51,9 +51,26 @@ class RiskEngine:
         # 1. Determine Threat Category — Strict Attack Signatures Only
         threat_category = "Benign"
 
-        # ── PORT SCANNING ────────────────────────────────────────────────────
-        # nmap -sS / masscan: 3+ distinct ports probed rapidly, OR 6+ ports at any speed
-        if (unique_ports >= 3 and mean_iat < 0.5 and tcp_ratio >= 0.70) or (unique_ports >= 6):
+        # Extract TCP flag metrics
+        syn_ratio = features_dict.get("syn_ratio", 0.0)
+        ack_ratio = features_dict.get("ack_ratio", 0.0)
+        null_flags = int(features_dict.get("null_flag_count", 0))
+        xmas_flags = int(features_dict.get("xmas_flag_count", 0))
+        fin_flags = int(features_dict.get("fin_flag_count", 0))
+
+        # ── TCP FLAG ANOMALY SCANS (Nmap Stealth Scans) ──────────────────────
+        if xmas_flags >= 2 or (xmas_flags >= 1 and unique_ports >= 2):
+            threat_category = "XMAS Port Scan"
+        elif null_flags >= 2 or (null_flags >= 1 and unique_ports >= 2):
+            threat_category = "NULL Port Scan"
+        elif fin_flags >= 2 or (fin_flags >= 1 and unique_ports >= 2):
+            threat_category = "FIN Port Scan"
+
+        # ── PORT SCANNING (SYN / Half-Open Scan / Connect Scan) ──────────────
+        # nmap -sS / masscan: 3+ distinct ports probed rapidly, OR 2+ ports with 100% SYN & 0% ACK
+        elif (unique_ports >= 2 and syn_ratio >= 0.75 and ack_ratio == 0 and total_pkts >= 2):
+            threat_category = "Port Scanning"
+        elif (unique_ports >= 3 and mean_iat < 0.5 and tcp_ratio >= 0.70) or (unique_ports >= 6):
             threat_category = "Port Scanning"
         elif unique_ports >= 4 and mean_iat < 0.08 and tcp_ratio >= 0.85:
             threat_category = "Port Scanning"

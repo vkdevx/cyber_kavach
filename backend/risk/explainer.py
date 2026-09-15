@@ -33,8 +33,28 @@ class ExplainerEngine:
 
         if threat_category == "Port Scanning":
             explanation = (
-                f"Destination port diversity is {unique_ports}x baseline ({unique_ports} unique ports contacted in 5s); "
+                f"Destination port diversity is {unique_ports}x baseline ({unique_ports} unique ports contacted in flow window); "
                 f"packet rate is elevated ({total_pkts} packets)."
+            )
+        elif threat_category == "XMAS Port Scan":
+            explanation = (
+                f"Stealth Nmap XMAS scan detected (FIN+PSH+URG flags set simultaneously on probe packets); "
+                f"targeting {unique_ports} port(s) to evade stateful inspection."
+            )
+        elif threat_category == "NULL Port Scan":
+            explanation = (
+                f"Stealth Nmap NULL scan detected (probe packets sent with 0 TCP flags set); "
+                f"targeting {unique_ports} port(s) to elicit RST responses."
+            )
+        elif threat_category == "FIN Port Scan":
+            explanation = (
+                f"Stealth Nmap FIN scan detected (lone FIN flag sent without prior handshake); "
+                f"targeting {unique_ports} port(s)."
+            )
+        elif threat_category in ["SYN Flood / DoS", "DDoS-like Volumetric Behavior"]:
+            explanation = (
+                f"SYN Flood / DoS signature detected ({total_pkts} packets at high machine rate, mean IAT: {mean_iat:.4f}s); "
+                f"half-open connection pool exhaustion attempt."
             )
         elif threat_category == "Network Scanning":
             explanation = (

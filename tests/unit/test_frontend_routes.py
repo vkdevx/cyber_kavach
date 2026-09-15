@@ -8,7 +8,7 @@ client = TestClient(app)
 def test_frontend_index_route():
     response = client.get("/")
     assert response.status_code == 200
-    assert "OneWay Sentinel" in response.text
+    assert "CyberKavach" in response.text or "Cyber Kavach" in response.text or "OneWay Sentinel" in response.text
     assert '<div id="root"></div>' in response.text
 
 

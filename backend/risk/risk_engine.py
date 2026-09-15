@@ -48,6 +48,18 @@ class RiskEngine:
             top_features = ["Standard service port response", "Normal browser stream", "Safe web traffic"]
             return risk_score, severity, confidence, threat_category, explanation, top_features
 
+        # If traffic consists purely of TCP RST (Reset/Closed) rejections sent by victim OS, it is benign response traffic
+        rst_ratio = features_dict.get("rst_ratio", 0.0)
+        syn_ratio = features_dict.get("syn_ratio", 0.0)
+        if rst_ratio >= 0.70 and syn_ratio == 0:
+            threat_category = "Benign"
+            risk_score = 0
+            severity = "Low"
+            confidence = 0.95
+            explanation = "Automated TCP RST (port closed) kernel response from host. Normal connection teardown."
+            top_features = ["TCP RST response", "Host closed port notice", "Non-attacking payload"]
+            return risk_score, severity, confidence, threat_category, explanation, top_features
+
         # 1. Determine Threat Category — Strict Attack Signatures Only
         threat_category = "Benign"
 

@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     FLOW_WINDOW_SECONDS: float = 10.0   # 10s window — more packets per flow for accurate analysis
     ALERT_THRESHOLD: int = 50           # Alert on risk >= 50 (attacks score 65-100, benign = 0)
     CRITICAL_THRESHOLD: int = 80
-    DEDUP_WINDOW_SECONDS: float = 120.0  # 2 min dedup — avoid duplicate alerts for same attack
+    DEDUP_WINDOW_SECONDS: float = 15.0  # 15s dedup — consolidate repeated packet bursts into 1 clean alert per attack
 
     WEIGHT_SUPERVISED_RF: float = 0.60
     WEIGHT_UNSUPERVISED_IF: float = 0.40

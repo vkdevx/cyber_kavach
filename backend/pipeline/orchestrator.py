@@ -25,6 +25,7 @@ class PipelineOrchestrator:
 
     def __init__(self):
         self.aggregator = FlowAggregator()
+        self.last_alerts: Dict[Tuple[str, str], float] = {}
 
     def process_packet(self, packet: ValidatedPacket, source: str = "live") -> Optional[Dict[str, Any]]:
         """Processes an incoming validated packet. Returns alert event payload if an alert is generated."""
@@ -101,6 +102,19 @@ class PipelineOrchestrator:
             # 6. Generate Alert if Genuine Threat Detected and Risk Score >= Threshold
             alert_payload = None
             if threat_category.lower() != "benign" and risk_score >= settings.ALERT_THRESHOLD:
+                # Deduplication: Consolidate repeated flows from same (src_ip, threat) within cooldown window
+                dedup_key = (flow.src_ip, threat_category)
+                now = time.time()
+                last_ts = self.last_alerts.get(dedup_key, 0.0)
+
+                # Clean old entries
+                self.last_alerts = {k: ts for k, ts in self.last_alerts.items() if now - ts < 60.0}
+
+                if now - last_ts < settings.DEDUP_WINDOW_SECONDS:
+                    # Suppress spam duplicate alert within window
+                    return None
+
+                self.last_alerts[dedup_key] = now
                 alert_id = f"alt_{uuid.uuid4().hex[:12]}"
                 geolocation = {
                     "country": getattr(intel_ip_match, "country_code", "Germany") if intel_ip_match else "Unknown",

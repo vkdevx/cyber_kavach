@@ -35,22 +35,32 @@ class RiskEngine:
         tcp_ratio = features_dict.get("tcp_ratio", 0.0)
         small_large_ratio = features_dict.get("small_large_pkt_ratio", 0.0)
 
-        # Standard benign service ports (Web, DNS, NTP, mDNS, SSDP, Local Dev)
-        BENIGN_PORTS = {80, 443, 53, 5353, 1900, 123, 8080, 8443, 8000, 5000, 3000, 5432, 3306, 27017}
+        # Standard public web & DNS service ports (HTTP, HTTPS, DNS, NTP)
+        BENIGN_SERVER_PORTS = {80, 443, 53, 5353, 1900, 123}
 
-        # If traffic originates from a standard service port (e.g. Google/Cloudflare 443 HTTPS response), it is always safe benign web traffic
-        if src_port in BENIGN_PORTS:
+        # Extract TCP flag metrics
+        syn_ratio = features_dict.get("syn_ratio", 0.0)
+        ack_ratio = features_dict.get("ack_ratio", 0.0)
+        rst_ratio = features_dict.get("rst_ratio", 0.0)
+        null_flags = int(features_dict.get("null_flag_count", 0))
+        xmas_flags = int(features_dict.get("xmas_flag_count", 0))
+        fin_flags = int(features_dict.get("fin_flag_count", 0))
+
+        # 1. Normal single-server web/DNS traffic (Browser to Google, YouTube, Cloudflare, etc.)
+        # If connecting to or receiving from standard web/DNS ports without scan anomalies or multi-port probes:
+        is_standard_web = (src_port in BENIGN_SERVER_PORTS or dst_port in BENIGN_SERVER_PORTS)
+        has_no_scan_anomalies = (unique_ports == 1 and null_flags == 0 and xmas_flags == 0 and fin_flags == 0)
+
+        if is_standard_web and has_no_scan_anomalies:
             threat_category = "Benign"
             risk_score = 0
             severity = "Low"
             confidence = 0.95
-            explanation = f"Legitimate server response from standard service port {src_port} (HTTPS/HTTP/DNS). Verified safe."
-            top_features = ["Standard service port response", "Normal browser stream", "Safe web traffic"]
+            explanation = "Normal legitimate web/DNS traffic (HTTPS/HTTP/DNS). Verified safe."
+            top_features = ["Standard service port", "Normal browser stream", "Safe web traffic"]
             return risk_score, severity, confidence, threat_category, explanation, top_features
 
-        # If traffic consists purely of TCP RST (Reset/Closed) rejections sent by victim OS, it is benign response traffic
-        rst_ratio = features_dict.get("rst_ratio", 0.0)
-        syn_ratio = features_dict.get("syn_ratio", 0.0)
+        # 2. Automated TCP RST (Reset/Closed) rejections sent by host OS
         if rst_ratio >= 0.70 and syn_ratio == 0:
             threat_category = "Benign"
             risk_score = 0
@@ -60,15 +70,8 @@ class RiskEngine:
             top_features = ["TCP RST response", "Host closed port notice", "Non-attacking payload"]
             return risk_score, severity, confidence, threat_category, explanation, top_features
 
-        # 1. Determine Threat Category — Strict Attack Signatures Only
+        # 3. Determine Threat Category — Strict Attack Signatures Only
         threat_category = "Benign"
-
-        # Extract TCP flag metrics
-        syn_ratio = features_dict.get("syn_ratio", 0.0)
-        ack_ratio = features_dict.get("ack_ratio", 0.0)
-        null_flags = int(features_dict.get("null_flag_count", 0))
-        xmas_flags = int(features_dict.get("xmas_flag_count", 0))
-        fin_flags = int(features_dict.get("fin_flag_count", 0))
 
         # ── TCP FLAG ANOMALY SCANS (Nmap Stealth Scans) ──────────────────────
         if xmas_flags >= 2 or (xmas_flags >= 1 and unique_ports >= 2):

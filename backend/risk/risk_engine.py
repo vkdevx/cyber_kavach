@@ -34,11 +34,6 @@ class RiskEngine:
         iat_var = features_dict.get("iat_variance", 0.0)
         tcp_ratio = features_dict.get("tcp_ratio", 0.0)
         small_large_ratio = features_dict.get("small_large_pkt_ratio", 0.0)
-
-        # Standard public web & DNS service ports (HTTP, HTTPS, DNS, NTP)
-        BENIGN_SERVER_PORTS = {80, 443, 53, 5353, 1900, 123}
-
-        # Extract TCP flag metrics
         syn_ratio = features_dict.get("syn_ratio", 0.0)
         ack_ratio = features_dict.get("ack_ratio", 0.0)
         rst_ratio = features_dict.get("rst_ratio", 0.0)
@@ -46,18 +41,27 @@ class RiskEngine:
         xmas_flags = int(features_dict.get("xmas_flag_count", 0))
         fin_flags = int(features_dict.get("fin_flag_count", 0))
 
-        # 1. Normal single-server web/DNS traffic (Browser to Google, YouTube, Cloudflare, etc.)
-        # If connecting to or receiving from standard web/DNS ports without scan anomalies or multi-port probes:
-        is_standard_web = (src_port in BENIGN_SERVER_PORTS or dst_port in BENIGN_SERVER_PORTS)
-        has_no_scan_anomalies = (unique_ports == 1 and null_flags == 0 and xmas_flags == 0 and fin_flags == 0)
+        # Standard public server service ports (Web, DNS, NTP, mDNS, SSDP)
+        BENIGN_SERVER_PORTS = {80, 443, 53, 5353, 1900, 123, 8080, 8443, 5000, 3000, 5432, 3306}
 
-        if is_standard_web and has_no_scan_anomalies:
+        # 1. Server Responses: Traffic originating FROM a standard service port (Google 443, DNS 53, etc.) is always benign
+        if src_port in BENIGN_SERVER_PORTS:
             threat_category = "Benign"
             risk_score = 0
             severity = "Low"
             confidence = 0.95
-            explanation = "Normal legitimate web/DNS traffic (HTTPS/HTTP/DNS). Verified safe."
-            top_features = ["Standard service port", "Normal browser stream", "Safe web traffic"]
+            explanation = f"Legitimate server response from service port {src_port} (HTTPS/HTTP/DNS). Verified safe."
+            top_features = ["Server service port response", "Normal browser stream", "Safe web traffic"]
+            return risk_score, severity, confidence, threat_category, explanation, top_features
+
+        # 2. Outbound Web Client Traffic: Traffic going TO standard public web/DNS without stealth scan flags
+        if dst_port in {80, 443, 53, 5353, 1900, 123} and null_flags == 0 and xmas_flags == 0 and fin_flags == 0:
+            threat_category = "Benign"
+            risk_score = 0
+            severity = "Low"
+            confidence = 0.95
+            explanation = f"Normal outbound client web/DNS request to port {dst_port}. Verified safe."
+            top_features = ["Standard outbound web request", "Normal client stream", "Safe web traffic"]
             return risk_score, severity, confidence, threat_category, explanation, top_features
 
         # 2. Automated TCP RST (Reset/Closed) rejections sent by host OS

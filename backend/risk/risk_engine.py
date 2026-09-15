@@ -80,13 +80,19 @@ class RiskEngine:
         elif (unique_ips >= 6 and mean_iat < 0.20) or (unique_ips >= 8):
             threat_category = "Network Scanning"
 
-        # ── SYN FLOOD / DoS ──────────────────────────────────────────────────
-        # Real SYN flood: 25+ tiny packets (<120B) at machine speed with low IAT and high TCP ratio
-        elif (
-            (total_pkts >= 25 and avg_pkt_size < 130 and tcp_ratio >= 0.85 and mean_iat < 0.02)
-            or (total_pkts >= 50 and mean_iat < 0.01 and tcp_ratio >= 0.80)
+        # ── SYN FLOOD / DoS / HTTP REQUEST FLOOD ─────────────────────────────
+        # 1. Real SYN flood: 25+ tiny packets (<120B) at machine speed with low IAT and high TCP ratio
+        if (
+            (total_pkts >= 20 and avg_pkt_size < 140 and tcp_ratio >= 0.80 and mean_iat < 0.05)
+            or (total_pkts >= 40 and mean_iat < 0.02 and tcp_ratio >= 0.75)
         ):
             threat_category = "SYN Flood / DoS"
+
+        # 2. HTTP Request Flood / Connection Burst (e.g. 500 parallel curls, endpoint fuzzing, DoS burst)
+        elif (total_pkts >= 8 and mean_iat < 0.05 and tcp_ratio >= 0.70):
+            threat_category = "DDoS-like Volumetric Behavior"
+        elif (total_pkts >= 20 and mean_iat < 0.10 and tcp_ratio >= 0.60):
+            threat_category = "DDoS-like Volumetric Behavior"
 
         # ── UDP FLOOD / SCAN ─────────────────────────────────────────────────
         # Real UDP flood: 40+ packets at high rate across 6+ ports
